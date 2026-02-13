@@ -1,43 +1,43 @@
 #!/usr/bin/env node
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
 const ROOT = process.cwd();
-const ISSUES_DIR = path.join(ROOT, 'issues');
-const DIST_DIR = path.join(ROOT, 'dist');
-const DIST_ISSUES_DIR = path.join(DIST_DIR, 'issues');
+const ISSUES_DIR = path.join(ROOT, "issues");
+const DIST_DIR = path.join(ROOT, "dist");
+const DIST_ISSUES_DIR = path.join(DIST_DIR, "issues");
 
 function escapeHtml(str) {
   return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function stripMdExtension(fileName) {
-  return fileName.replace(/\.md$/i, '');
+  return fileName.replace(/\.md$/i, "");
 }
 
 function toToken(value) {
-  return String(value || '')
+  return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'unknown';
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "unknown";
 }
 
 function parseIssueFileName(fileName) {
-  if (!fileName.endsWith('.md')) {
+  if (!fileName.endsWith(".md")) {
     throw new Error(`Issue file must be .md: ${fileName}`);
   }
   const base = path.basename(fileName);
   const match = base.match(/^(\d{4})-([^.]+)\.md$/);
   if (!match) {
     throw new Error(
-      `Issue file must match "[digits]-[title].md" with exactly 4 digits: ${fileName}`
+      `Issue file must match "[digits]-[title].md" with exactly 4 digits: ${fileName}`,
     );
   }
   const idText = match[1];
@@ -48,38 +48,42 @@ function parseIssueFileName(fileName) {
   return {
     idText,
     number,
-    slug: stripMdExtension(base)
+    slug: stripMdExtension(base),
   };
 }
 
 function normalizeLink(url, pageType) {
-  if (/^https?:\/\//i.test(url) || /^mailto:/i.test(url) || url.startsWith('#')) {
+  if (
+    /^https?:\/\//i.test(url) || /^mailto:/i.test(url) || url.startsWith("#")
+  ) {
     return url;
   }
 
-  if (url.endsWith('.md')) {
+  if (url.endsWith(".md")) {
     const base = path.basename(url);
-    const htmlName = stripMdExtension(base) + '.html';
-    return pageType === 'index' ? `issues/${htmlName}` : htmlName;
+    const htmlName = stripMdExtension(base) + ".html";
+    return pageType === "index" ? `issues/${htmlName}` : htmlName;
   }
 
   return url;
 }
 
 function issueHref(issue, pageType) {
-  return pageType === 'index' ? `issues/${issue.slug}.html` : `${issue.slug}.html`;
+  return pageType === "index"
+    ? `issues/${issue.slug}.html`
+    : `${issue.slug}.html`;
 }
 
 function renderInline(text, pageType) {
   let html = escapeHtml(text);
 
   html = html.replace(/`([^`]+)`/g, (_m, code) => `<code>${code}</code>`);
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => {
     const normalized = normalizeLink(url, pageType);
     const external = /^https?:\/\//i.test(normalized);
-    const attrs = external ? ' target="_blank" rel="noreferrer noopener"' : '';
+    const attrs = external ? ' target="_blank" rel="noreferrer noopener"' : "";
     return `<a href="${escapeHtml(normalized)}"${attrs}>${label}</a>`;
   });
 
@@ -87,10 +91,10 @@ function renderInline(text, pageType) {
 }
 
 function renderMarkdown(markdown, pageType) {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const out = [];
   let inCode = false;
-  let codeLang = '';
+  let codeLang = "";
   let listType = null;
   let paragraph = [];
 
@@ -98,7 +102,7 @@ function renderMarkdown(markdown, pageType) {
     if (!paragraph.length) {
       return;
     }
-    out.push(`<p>${renderInline(paragraph.join(' '), pageType)}</p>`);
+    out.push(`<p>${renderInline(paragraph.join(" "), pageType)}</p>`);
     paragraph = [];
   };
 
@@ -106,7 +110,7 @@ function renderMarkdown(markdown, pageType) {
     if (!listType) {
       return;
     }
-    out.push(listType === 'ol' ? '</ol>' : '</ul>');
+    out.push(listType === "ol" ? "</ol>" : "</ul>");
     listType = null;
   };
 
@@ -114,21 +118,23 @@ function renderMarkdown(markdown, pageType) {
     const trimmed = line.trim();
 
     if (inCode) {
-      if (trimmed.startsWith('```')) {
-        out.push('</code></pre>');
+      if (trimmed.startsWith("```")) {
+        out.push("</code></pre>");
         inCode = false;
-        codeLang = '';
+        codeLang = "";
       } else {
         out.push(`${escapeHtml(line)}\n`);
       }
       continue;
     }
 
-    if (trimmed.startsWith('```')) {
+    if (trimmed.startsWith("```")) {
       flushParagraph();
       closeList();
       codeLang = trimmed.slice(3).trim();
-      const className = codeLang ? ` class="language-${escapeHtml(codeLang)}"` : '';
+      const className = codeLang
+        ? ` class="language-${escapeHtml(codeLang)}"`
+        : "";
       out.push(`<pre><code${className}>`);
       inCode = true;
       continue;
@@ -152,12 +158,12 @@ function renderMarkdown(markdown, pageType) {
     const ulMatch = trimmed.match(/^-\s+(.+)$/);
     if (ulMatch) {
       flushParagraph();
-      if (listType && listType !== 'ul') {
+      if (listType && listType !== "ul") {
         closeList();
       }
       if (!listType) {
-        out.push('<ul>');
-        listType = 'ul';
+        out.push("<ul>");
+        listType = "ul";
       }
       out.push(`<li>${renderInline(ulMatch[1], pageType)}</li>`);
       continue;
@@ -166,21 +172,21 @@ function renderMarkdown(markdown, pageType) {
     const olMatch = trimmed.match(/^\d+\.\s+(.+)$/);
     if (olMatch) {
       flushParagraph();
-      if (listType && listType !== 'ol') {
+      if (listType && listType !== "ol") {
         closeList();
       }
       if (!listType) {
-        out.push('<ol>');
-        listType = 'ol';
+        out.push("<ol>");
+        listType = "ol";
       }
       out.push(`<li>${renderInline(olMatch[1], pageType)}</li>`);
       continue;
     }
 
-    if (trimmed === '---') {
+    if (trimmed === "---") {
       flushParagraph();
       closeList();
-      out.push('<hr />');
+      out.push("<hr />");
       continue;
     }
 
@@ -191,52 +197,58 @@ function renderMarkdown(markdown, pageType) {
   closeList();
 
   if (inCode) {
-    out.push('</code></pre>');
+    out.push("</code></pre>");
   }
 
-  return out.join('\n');
+  return out.join("\n");
 }
 
 function splitFrontMatter(markdown, fileName) {
-  const normalized = markdown.replace(/\r\n/g, '\n');
-  if (!normalized.startsWith('---\n')) {
-    throw new Error(`Missing YAML front matter (expected leading ---): ${fileName}`);
+  const normalized = markdown.replace(/\r\n/g, "\n");
+  if (!normalized.startsWith("---\n")) {
+    throw new Error(
+      `Missing YAML front matter (expected leading ---): ${fileName}`,
+    );
   }
-  const lines = normalized.split('\n');
+  const lines = normalized.split("\n");
   let endIndex = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === '---') {
+    if (lines[i].trim() === "---") {
       endIndex = i;
       break;
     }
   }
   if (endIndex === -1) {
-    throw new Error(`Unterminated YAML front matter (missing closing ---): ${fileName}`);
+    throw new Error(
+      `Unterminated YAML front matter (missing closing ---): ${fileName}`,
+    );
   }
   const yamlLines = lines.slice(1, endIndex);
   const bodyLines = lines.slice(endIndex + 1);
-  const body = bodyLines.join('\n').replace(/^\n+/, '');
-  return { yaml: yamlLines.join('\n'), body };
+  const body = bodyLines.join("\n").replace(/^\n+/, "");
+  return { yaml: yamlLines.join("\n"), body };
 }
 
 function parseIssueFrontMatter(yaml, fileName) {
-  const allowedKeys = new Set(['title', 'status', 'depends_on']);
+  const allowedKeys = new Set(["title", "status", "depends_on"]);
   const metadata = {};
   let currentKey = null;
 
-  const yamlLines = yaml.split('\n');
+  const yamlLines = yaml.split("\n");
   for (let i = 0; i < yamlLines.length; i++) {
     const rawLine = yamlLines[i];
     const trimmed = rawLine.trim();
-    if (!trimmed || trimmed.startsWith('#')) {
+    if (!trimmed || trimmed.startsWith("#")) {
       continue;
     }
 
     if (/^\s+-\s+/.test(rawLine)) {
-      if (currentKey !== 'depends_on') {
-        throw new Error(`Unexpected list item in front matter (${fileName}:${i + 1})`);
+      if (currentKey !== "depends_on") {
+        throw new Error(
+          `Unexpected list item in front matter (${fileName}:${i + 1})`,
+        );
       }
-      const value = trimmed.replace(/^-+\s+/, '').trim();
+      const value = trimmed.replace(/^-+\s+/, "").trim();
       if (!metadata.depends_on) {
         metadata.depends_on = [];
       }
@@ -246,7 +258,9 @@ function parseIssueFrontMatter(yaml, fileName) {
 
     const match = rawLine.match(/^([A-Za-z0-9_]+)\s*:\s*(.*)$/);
     if (!match) {
-      throw new Error(`Invalid YAML front matter line (${fileName}:${i + 1}): ${rawLine}`);
+      throw new Error(
+        `Invalid YAML front matter line (${fileName}:${i + 1}): ${rawLine}`,
+      );
     }
 
     const key = match[1];
@@ -256,13 +270,13 @@ function parseIssueFrontMatter(yaml, fileName) {
     }
     currentKey = key;
 
-    if (key === 'depends_on') {
+    if (key === "depends_on") {
       if (!value) {
         metadata.depends_on = [];
         continue;
       }
       const inline = value.trim();
-      if (inline === '[]') {
+      if (inline === "[]") {
         metadata.depends_on = [];
         continue;
       }
@@ -275,7 +289,7 @@ function parseIssueFrontMatter(yaml, fileName) {
         metadata.depends_on = [];
         continue;
       }
-      metadata.depends_on = inner.split(',').map((item) => item.trim());
+      metadata.depends_on = inner.split(",").map((item) => item.trim());
       continue;
     }
 
@@ -283,7 +297,7 @@ function parseIssueFrontMatter(yaml, fileName) {
     if (!scalar) {
       throw new Error(`Front matter "${key}" must not be empty in ${fileName}`);
     }
-    const unquoted = scalar.replace(/^['"]|['"]$/g, '');
+    const unquoted = scalar.replace(/^['"]|['"]$/g, "");
     metadata[key] = unquoted;
   }
 
@@ -294,7 +308,7 @@ function parseIssueFrontMatter(yaml, fileName) {
     throw new Error(`Front matter must include "status" in ${fileName}`);
   }
   const statusToken = String(metadata.status).trim().toLowerCase();
-  if (statusToken !== 'open' && statusToken !== 'closed') {
+  if (statusToken !== "open" && statusToken !== "closed") {
     throw new Error(`status must be "open" or "closed" in ${fileName}`);
   }
 
@@ -303,7 +317,9 @@ function parseIssueFrontMatter(yaml, fileName) {
     throw new Error(`depends_on must be an array in ${fileName}`);
   }
   const dependsOnNumbers = dependsOnRaw
-    .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+    .filter((value) =>
+      value !== null && value !== undefined && String(value).trim() !== ""
+    )
     .map((value) => {
       const asNumber = Number.parseInt(String(value).trim(), 10);
       if (!Number.isInteger(asNumber)) {
@@ -316,8 +332,8 @@ function parseIssueFrontMatter(yaml, fileName) {
 
   return {
     title: String(metadata.title).trim(),
-    status: statusToken === 'open' ? 'Open' : 'Closed',
-    dependsOnNumbers: unique
+    status: statusToken === "open" ? "Open" : "Closed",
+    dependsOnNumbers: unique,
   };
 }
 
@@ -336,7 +352,7 @@ function parseIssue(fileName, markdown) {
     dependsOnNumbers: metadata.dependsOnNumbers,
     blocksNumbers: [],
     markdown,
-    bodyMarkdown
+    bodyMarkdown,
   };
 }
 
@@ -349,7 +365,7 @@ function formatIssueKey(idText) {
 }
 
 function formatIssueKeyFromNumber(number) {
-  return `WUHU-${String(number).padStart(4, '0')}`;
+  return `WUHU-${String(number).padStart(4, "0")}`;
 }
 
 function getIssueByNumberMap(issues) {
@@ -372,7 +388,9 @@ function verifyIssues(issues, issueFiles) {
       throw new Error(`Missing title for ${issueFiles[i]}`);
     }
     if (issue.dependsOnNumbers.includes(issue.number)) {
-      throw new Error(`Issue ${formatIssueKey(issue.idText)} cannot depend on itself`);
+      throw new Error(
+        `Issue ${formatIssueKey(issue.idText)} cannot depend on itself`,
+      );
     }
   }
 }
@@ -386,7 +404,9 @@ function assignBlocksAndVerifyDeps(issues) {
       const target = issueByNumber.get(dep);
       if (!target) {
         throw new Error(
-          `Unknown dependency ${formatIssueKeyFromNumber(dep)} referenced by ${formatIssueKey(issue.idText)}`
+          `Unknown dependency ${formatIssueKeyFromNumber(dep)} referenced by ${
+            formatIssueKey(issue.idText)
+          }`,
         );
       }
       if (!blocksByNumber.has(dep)) {
@@ -478,8 +498,10 @@ function renderDependencyGraph(issues) {
     });
   });
 
-  const width = margin * 2 + sortedColumnKeys.length * nodeWidth + Math.max(0, sortedColumnKeys.length - 1) * colGap;
-  const height = margin * 2 + maxRows * nodeHeight + Math.max(0, maxRows - 1) * rowGap;
+  const width = margin * 2 + sortedColumnKeys.length * nodeWidth +
+    Math.max(0, sortedColumnKeys.length - 1) * colGap;
+  const height = margin * 2 + maxRows * nodeHeight +
+    Math.max(0, maxRows - 1) * rowGap;
 
   const edges = [];
   for (const issue of issues) {
@@ -499,7 +521,9 @@ function renderDependencyGraph(issues) {
       const y2 = targetPos.y + nodeHeight / 2;
       const c1x = x1 + Math.max(30, (x2 - x1) / 2);
       const c2x = x2 - Math.max(30, (x2 - x1) / 2);
-      edges.push(`<path d="M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}" class="graph-edge" marker-end="url(#arrow)" />`);
+      edges.push(
+        `<path d="M ${x1} ${y1} C ${c1x} ${y1}, ${c2x} ${y2}, ${x2} ${y2}" class="graph-edge" marker-end="url(#arrow)" />`,
+      );
     }
   }
 
@@ -510,40 +534,50 @@ function renderDependencyGraph(issues) {
       const pos = positions.get(issue.number);
       const x = pos.x;
       const y = pos.y;
-      const title = issue.title.length > 36 ? `${issue.title.slice(0, 33)}...` : issue.title;
+      const title = issue.title.length > 36
+        ? `${issue.title.slice(0, 33)}...`
+        : issue.title;
       return [
         `<a href="issues/${escapeHtml(issue.slug)}.html">`,
         `<rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="3" class="graph-node" />`,
-        `<text x="${x + 18}" y="${y + 31}" class="graph-id">${escapeHtml(formatIssueKey(issue.idText))}</text>`,
-        `<text x="${x + 18}" y="${y + 56}" class="graph-title">${escapeHtml(title)}</text>`,
-        `<text x="${x + 18}" y="${y + 76}" class="graph-status">${escapeHtml(issue.status)}</text>`,
-        '</a>'
-      ].join('');
+        `<text x="${x + 18}" y="${y + 31}" class="graph-id">${
+          escapeHtml(formatIssueKey(issue.idText))
+        }</text>`,
+        `<text x="${x + 18}" y="${y + 56}" class="graph-title">${
+          escapeHtml(title)
+        }</text>`,
+        `<text x="${x + 18}" y="${y + 76}" class="graph-status">${
+          escapeHtml(issue.status)
+        }</text>`,
+        "</a>",
+      ].join("");
     })
-    .join('\n');
+    .join("\n");
 
   return [
     '<div class="graph-wrap">',
-    `<svg class="dep-graph" viewBox="0 0 ${width} ${Math.max(height, 120)}" role="img" aria-label="Issue dependency graph">`,
-    '<defs>',
+    `<svg class="dep-graph" viewBox="0 0 ${width} ${
+      Math.max(height, 120)
+    }" role="img" aria-label="Issue dependency graph">`,
+    "<defs>",
     '<marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">',
     '<path d="M 0 0 L 10 5 L 0 10 z" class="graph-arrow" />',
-    '</marker>',
-    '</defs>',
-    '<g>',
-    edges.join('\n'),
-    '</g>',
-    '<g>',
+    "</marker>",
+    "</defs>",
+    "<g>",
+    edges.join("\n"),
+    "</g>",
+    "<g>",
     nodes,
-    '</g>',
-    '</svg>',
-    '</div>'
-  ].join('\n');
+    "</g>",
+    "</svg>",
+    "</div>",
+  ].join("\n");
 }
 
 function linkIssueIds(numbers, issueByNumber, pageType) {
   if (!numbers.length) {
-    return '—';
+    return "—";
   }
   return numbers
     .map((number) => {
@@ -552,80 +586,102 @@ function linkIssueIds(numbers, issueByNumber, pageType) {
         return escapeHtml(formatIssueKeyFromNumber(number));
       }
       const href = issueHref(issue, pageType);
-      return `<a href="${escapeHtml(href)}">${escapeHtml(formatIssueKey(issue.idText))}</a>`;
+      return `<a href="${escapeHtml(href)}">${
+        escapeHtml(formatIssueKey(issue.idText))
+      }</a>`;
     })
-    .join(', ');
+    .join(", ");
 }
 
 function renderLayout({ title, content, rootPath }) {
   return [
-    '<!doctype html>',
+    "<!doctype html>",
     '<html lang="en">',
-    '<head>',
+    "<head>",
     '<meta charset="utf-8" />',
     '<meta name="viewport" content="width=device-width, initial-scale=1" />',
     `<title>${escapeHtml(title)}</title>`,
     `<link rel="stylesheet" href="${rootPath}styles.css" />`,
-    '</head>',
-    '<body>',
+    "</head>",
+    "<body>",
     '<div class="site-shell">',
     '<header class="site-header">',
     `<a class="brand" href="${rootPath}index.html">Wuhu <span>Issue Tracker</span></a>`,
     '<nav class="site-nav">',
     `<a href="${rootPath}index.html">Issues</a>`,
     `<a href="${rootPath}index.html#dependency-map">Dependencies</a>`,
-    '</nav>',
-    '</header>',
+    "</nav>",
+    "</header>",
     '<main class="page">',
     content,
-    '</main>',
-    '</div>',
-    '</body>',
-    '</html>'
-  ].join('\n');
+    "</main>",
+    "</div>",
+    "</body>",
+    "</html>",
+  ].join("\n");
 }
 
 function renderIndexPage(issues) {
   const issueByNumber = getIssueByNumberMap(issues);
-  const openCount = issues.filter((issue) => toToken(issue.status) === 'open').length;
-  const closedCount = issues.filter((issue) => toToken(issue.status) === 'closed').length;
-  const blockedCount = issues.filter((issue) => issue.dependsOnNumbers.length > 0).length;
-  const readyCount = issues.filter((issue) => issue.dependsOnNumbers.length === 0).length;
+  const openCount =
+    issues.filter((issue) => toToken(issue.status) === "open").length;
+  const closedCount =
+    issues.filter((issue) => toToken(issue.status) === "closed").length;
+  const blockedCount =
+    issues.filter((issue) => issue.dependsOnNumbers.length > 0).length;
+  const readyCount =
+    issues.filter((issue) => issue.dependsOnNumbers.length === 0).length;
 
   const rows = issues
     .map((issue) => {
       return [
-        '<tr>',
-        `<td><a class="issue-link" href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(formatIssueKey(issue.idText))}</a></td>`,
-        `<td><a class="issue-link title-link" href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(issue.title)}</a></td>`,
-        `<td><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></td>`,
-        `<td>${linkIssueIds(issue.dependsOnNumbers, issueByNumber, 'index')}</td>`,
-        `<td>${linkIssueIds(issue.blocksNumbers, issueByNumber, 'index')}</td>`,
-        '</tr>'
-      ].join('\n');
+        "<tr>",
+        `<td><a class="issue-link" href="issues/${
+          escapeHtml(issue.slug)
+        }.html">${escapeHtml(formatIssueKey(issue.idText))}</a></td>`,
+        `<td><a class="issue-link title-link" href="issues/${
+          escapeHtml(issue.slug)
+        }.html">${escapeHtml(issue.title)}</a></td>`,
+        `<td><span class="pill pill-${toToken(issue.status)}">${
+          escapeHtml(issue.status)
+        }</span></td>`,
+        `<td>${
+          linkIssueIds(issue.dependsOnNumbers, issueByNumber, "index")
+        }</td>`,
+        `<td>${linkIssueIds(issue.blocksNumbers, issueByNumber, "index")}</td>`,
+        "</tr>",
+      ].join("\n");
     })
-    .join('\n');
+    .join("\n");
   const mobileCards = issues
     .map((issue) => {
       return [
         '<article class="issue-card">',
-        `<h3><a href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(formatIssueKey(issue.idText))} ${escapeHtml(issue.title)}</a></h3>`,
+        `<h3><a href="issues/${escapeHtml(issue.slug)}.html">${
+          escapeHtml(formatIssueKey(issue.idText))
+        } ${escapeHtml(issue.title)}</a></h3>`,
         '<div class="issue-card-meta">',
-        `<div><span class="label">Status</span><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></div>`,
-        `<div><span class="label">Depends On</span><span>${linkIssueIds(issue.dependsOnNumbers, issueByNumber, 'index')}</span></div>`,
-        `<div><span class="label">Blocks</span><span>${linkIssueIds(issue.blocksNumbers, issueByNumber, 'index')}</span></div>`,
-        '</div>',
-        '</article>'
-      ].join('\n');
+        `<div><span class="label">Status</span><span class="pill pill-${
+          toToken(issue.status)
+        }">${escapeHtml(issue.status)}</span></div>`,
+        `<div><span class="label">Depends On</span><span>${
+          linkIssueIds(issue.dependsOnNumbers, issueByNumber, "index")
+        }</span></div>`,
+        `<div><span class="label">Blocks</span><span>${
+          linkIssueIds(issue.blocksNumbers, issueByNumber, "index")
+        }</span></div>`,
+        "</div>",
+        "</article>",
+      ].join("\n");
     })
-    .join('\n');
+    .join("\n");
 
   const graph = renderDependencyGraph(issues);
 
   const content = [
     '<header class="page-intro">',
     '<p class="kicker">Issue Tracker</p>',
-    '<h1>Wuhu Issue Tracker</h1>',
+    "<h1>Wuhu Issue Tracker</h1>",
     '<p class="lede">Static site generated from <code>issues/*.md</code> with status and dependency relationships.</p>',
     '<div class="overview-meta">',
     `<p><span class="label">Total</span><strong>${issues.length}</strong></p>`,
@@ -633,72 +689,76 @@ function renderIndexPage(issues) {
     `<p><span class="label">Closed</span><strong>${closedCount}</strong></p>`,
     `<p><span class="label">Ready</span><strong>${readyCount}</strong></p>`,
     `<p><span class="label">Blocked</span><strong>${blockedCount}</strong></p>`,
-    '</div>',
-    '</header>',
+    "</div>",
+    "</header>",
     '<section class="panel">',
     '<div class="section-head">',
-    '<h2>Issues</h2>',
+    "<h2>Issues</h2>",
     '<p class="muted">Generated from markdown metadata.</p>',
-    '</div>',
+    "</div>",
     '<div class="table-wrap">',
-    '<table>',
-    '<thead>',
-    '<tr><th>ID</th><th>Title</th><th>Status</th><th>Depends On</th><th>Blocks</th></tr>',
-    '</thead>',
-    '<tbody>',
+    "<table>",
+    "<thead>",
+    "<tr><th>ID</th><th>Title</th><th>Status</th><th>Depends On</th><th>Blocks</th></tr>",
+    "</thead>",
+    "<tbody>",
     rows,
-    '</tbody>',
-    '</table>',
-    '</div>',
+    "</tbody>",
+    "</table>",
+    "</div>",
     '<div class="issue-list-mobile">',
     mobileCards,
-    '</div>',
-    '</section>',
+    "</div>",
+    "</section>",
     '<section id="dependency-map" class="panel">',
     '<div class="section-head">',
-    '<h2>Dependency Graph</h2>',
+    "<h2>Dependency Graph</h2>",
     '<p class="muted">Arrows run from prerequisite issue to dependent issue.</p>',
-    '</div>',
+    "</div>",
     graph,
-    '</section>'
-  ].join('\n');
+    "</section>",
+  ].join("\n");
 
   return renderLayout({
-    title: 'Wuhu Issue Tracker',
+    title: "Wuhu Issue Tracker",
     content,
-    rootPath: ''
+    rootPath: "",
   });
 }
 
 function renderIssuePage(issue, issueByNumber) {
-  const depends = linkIssueIds(issue.dependsOnNumbers, issueByNumber, 'issue');
-  const blocks = linkIssueIds(issue.blocksNumbers, issueByNumber, 'issue');
-  const bodyHtml = renderMarkdown(issue.bodyMarkdown, 'issue');
+  const depends = linkIssueIds(issue.dependsOnNumbers, issueByNumber, "issue");
+  const blocks = linkIssueIds(issue.blocksNumbers, issueByNumber, "issue");
+  const bodyHtml = renderMarkdown(issue.bodyMarkdown, "issue");
 
   const content = [
     '<nav class="crumbs"><a href="../index.html">All Issues</a></nav>',
     '<header class="page-intro issue-intro">',
     `<p class="kicker">${escapeHtml(formatIssueKey(issue.idText))}</p>`,
     `<h1>${escapeHtml(issue.title)}</h1>`,
-    `<p class="lede">Status <span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span>.</p>`,
-    '</header>',
+    `<p class="lede">Status <span class="pill pill-${toToken(issue.status)}">${
+      escapeHtml(issue.status)
+    }</span>.</p>`,
+    "</header>",
     '<article class="panel issue">',
     '<div class="meta-grid">',
-    `<div><span class="label">Status</span><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></div>`,
+    `<div><span class="label">Status</span><span class="pill pill-${
+      toToken(issue.status)
+    }">${escapeHtml(issue.status)}</span></div>`,
     `<div><span class="label">Depends On</span><span>${depends}</span></div>`,
     `<div><span class="label">Blocks</span><span>${blocks}</span></div>`,
-    '</div>',
-    '<hr />',
+    "</div>",
+    "<hr />",
     '<section class="md-content">',
     bodyHtml,
-    '</section>',
-    '</article>'
-  ].join('\n');
+    "</section>",
+    "</article>",
+  ].join("\n");
 
   return renderLayout({
     title: `${formatIssueKey(issue.idText)} - ${issue.title}`,
     content,
-    rootPath: '../'
+    rootPath: "../",
   });
 }
 
@@ -1206,7 +1266,7 @@ hr {
 }
 `;
 
-  fs.writeFileSync(path.join(DIST_DIR, 'styles.css'), css, 'utf8');
+  fs.writeFileSync(path.join(DIST_DIR, "styles.css"), css, "utf8");
 }
 
 function main() {
@@ -1216,11 +1276,13 @@ function main() {
 
   const issueFiles = fs
     .readdirSync(ISSUES_DIR)
-    .filter((file) => file.endsWith('.md'))
-    .sort((a, b) => parseIssueFileName(a).number - parseIssueFileName(b).number);
+    .filter((file) => file.endsWith(".md"))
+    .sort((a, b) =>
+      parseIssueFileName(a).number - parseIssueFileName(b).number
+    );
 
   const issues = issueFiles.map((fileName) => {
-    const markdown = fs.readFileSync(path.join(ISSUES_DIR, fileName), 'utf8');
+    const markdown = fs.readFileSync(path.join(ISSUES_DIR, fileName), "utf8");
     return parseIssue(fileName, markdown);
   });
 
@@ -1233,11 +1295,15 @@ function main() {
   writeStyles();
 
   const indexHtml = renderIndexPage(issues);
-  fs.writeFileSync(path.join(DIST_DIR, 'index.html'), indexHtml, 'utf8');
+  fs.writeFileSync(path.join(DIST_DIR, "index.html"), indexHtml, "utf8");
 
   for (const issue of issues) {
     const issueHtml = renderIssuePage(issue, issueByNumber);
-    fs.writeFileSync(path.join(DIST_ISSUES_DIR, `${issue.slug}.html`), issueHtml, 'utf8');
+    fs.writeFileSync(
+      path.join(DIST_ISSUES_DIR, `${issue.slug}.html`),
+      issueHtml,
+      "utf8",
+    );
   }
 
   console.log(`Built ${issues.length} issues into ${DIST_DIR}`);
