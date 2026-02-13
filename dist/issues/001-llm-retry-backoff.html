@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Issue #001 - LLM Call Retry with Exponential Backoff</title>
+<link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+<main class="container">
+<nav class="crumbs"><a href="../index.html">All Issues</a></nav>
+<article class="card issue">
+<h1>#001 LLM Call Retry with Exponential Backoff</h1>
+<div class="meta-grid">
+<div><span class="label">Status</span><span>Open</span></div>
+<div><span class="label">Priority</span><span>High</span></div>
+<div><span class="label">Depends On</span><span><a href="002-model-provider-switcher.html">#002</a></span></div>
+<div><span class="label">Blocks</span><span>—</span></div>
+</div>
+<hr />
+<section class="md-content">
+<h2>Summary</h2>
+<p>Wrap LLM streaming calls in a retry loop with exponential backoff to handle transient failures gracefully.</p>
+<h2>Requirements</h2>
+<ul>
+<li>Retry loop with minimum 5 attempts</li>
+<li>Exponential backoff between retries (e.g., 1s, 2s, 4s, 8s, 16s)</li>
+<li>On retry, emit a UI notification entry (e.g., &quot;Retrying due to network error...&quot;)</li>
+<li><strong>Critical:</strong> Retry notification must NOT be included in LLM context</li>
+<li>UI-only, not persisted to conversation history sent to model</li>
+<li>User sees it, model doesn&#39;t</li>
+</ul>
+<h2>Background</h2>
+<p>From the postmortem of session <code>2a5cbaaa-8268-460d-9a07-aa172a89991d</code>: the LLM stream failed after tool execution but before the assistant response was finalized. The error wasn&#39;t persisted, and the session just stopped. With retry logic, transient failures would be recoverable.</p>
+<h2>Testing</h2>
+<h3>Unit Tests</h3>
+<ul>
+<li>Verify retry count and backoff timing</li>
+<li>Verify UI entry is emitted on retry</li>
+<li>Verify UI entry is excluded from LLM context</li>
+</ul>
+<h3>Manual Testing</h3>
+<ol>
+<li>Start a session with a valid model</li>
+<li>Have one turn of conversation (baseline)</li>
+<li>Switch model to a non-existent one (e.g., <code>gpt-404</code>) using issue #002&#39;s functionality</li>
+<li>Trigger a prompt</li>
+<li>Observe:</li>
+</ol>
+<ul>
+<li>Retry attempts in server logs</li>
+<li>UI shows retry notifications</li>
+<li>After max retries, graceful failure message</li>
+</ul>
+<h2>Implementation Notes</h2>
+<ul>
+<li>Likely in <code>OpenAIResponsesProvider.swift</code> or <code>AgentLoop.swift</code></li>
+<li>Consider jitter to avoid thundering herd</li>
+<li>May need a new entry type for UI-only messages (not part of conversation context)</li>
+</ul>
+</section>
+</article>
+</main>
+</body>
+</html>

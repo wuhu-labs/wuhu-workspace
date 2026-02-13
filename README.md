@@ -15,3 +15,17 @@ Issue tracking and project management for [wuhu-labs/wuhu](https://github.com/wu
 002 Model/Provider Switcher
  └──► 001 LLM Retry with Backoff
 ```
+
+## Static Site
+
+Build the static site from `issues/*.md`:
+
+```bash
+npm run build
+```
+
+Output is written to `dist/`:
+
+- `dist/index.html` - issue list + dependency graph
+- `dist/issues/*.html` - individual issue pages
+- `dist/styles.css` - shared responsive dark theme
