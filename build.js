@@ -427,6 +427,21 @@ function renderIndexPage(issues) {
       ].join('\n');
     })
     .join('\n');
+  const mobileCards = issues
+    .map((issue) => {
+      return [
+        '<article class="issue-card">',
+        `<h3><a href="issues/${escapeHtml(issue.slug)}.html">#${escapeHtml(issue.id)} ${escapeHtml(issue.title)}</a></h3>`,
+        '<div class="issue-card-meta">',
+        `<div><span class="label">Status</span><span>${escapeHtml(issue.status)}</span></div>`,
+        `<div><span class="label">Priority</span><span>${escapeHtml(issue.priority)}</span></div>`,
+        `<div><span class="label">Depends On</span><span>${linkIssueIds(issue.dependsOnIds, issueById, 'index')}</span></div>`,
+        `<div><span class="label">Blocks</span><span>${linkIssueIds(issue.blocksIds, issueById, 'index')}</span></div>`,
+        '</div>',
+        '</article>'
+      ].join('\n');
+    })
+    .join('\n');
 
   const graph = renderDependencyGraph(issues);
 
@@ -446,6 +461,9 @@ function renderIndexPage(issues) {
     rows,
     '</tbody>',
     '</table>',
+    '</div>',
+    '<div class="issue-list-mobile">',
+    mobileCards,
     '</div>',
     '</section>',
     '<section class="card">',
@@ -555,6 +573,10 @@ h3 {
   overflow-x: auto;
 }
 
+.issue-list-mobile {
+  display: none;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -574,6 +596,31 @@ th {
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.issue-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.issue-card h3 {
+  margin: 0 0 0.7rem;
+  font-size: 1rem;
+}
+
+.issue-card-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.issue-card-meta div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.6rem;
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .muted {
@@ -639,7 +686,7 @@ th {
 
 .dep-graph {
   width: 100%;
-  min-width: 440px;
+  min-width: 400px;
   height: auto;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -689,8 +736,25 @@ hr {
     border-radius: 12px;
   }
 
+  .table-wrap {
+    display: none;
+  }
+
+  .issue-list-mobile {
+    display: grid;
+    gap: 0.7rem;
+  }
+
+  .issue-card-meta {
+    grid-template-columns: 1fr;
+  }
+
   .meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dep-graph {
+    min-width: 320px;
   }
 
   th,
