@@ -7,13 +7,32 @@
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<main class="container">
-<header class="header">
-<h1>Wuhu Issue Tracker</h1>
-<p class="muted">Static site generated from markdown issues.</p>
+<div class="site-shell">
+<header class="site-header">
+<a class="brand" href="index.html">Wuhu <span>Issue Tracker</span></a>
+<nav class="site-nav">
+<a href="index.html">Issues</a>
+<a href="index.html#dependency-map">Dependencies</a>
+</nav>
 </header>
-<section class="card">
-<h2>Issues</h2>
+<main class="page">
+<header class="page-intro">
+<p class="kicker">Project Overview</p>
+<h1>Build priorities with clear dependency flow.</h1>
+<p class="lede">A lightweight static tracker with Scandinavian-style restraint: fewer colors, stronger hierarchy, and room for decisions to breathe.</p>
+<div class="stats-grid">
+<article class="stat"><p class="label">Total issues</p><p class="stat-value">2</p></article>
+<article class="stat"><p class="label">Open</p><p class="stat-value">2</p></article>
+<article class="stat"><p class="label">Ready now</p><p class="stat-value">1</p></article>
+<article class="stat"><p class="label">Blocked</p><p class="stat-value">1</p></article>
+<article class="stat"><p class="label">High priority</p><p class="stat-value">2</p></article>
+</div>
+</header>
+<section class="panel">
+<div class="section-head">
+<h2>Issue Index</h2>
+<p class="muted">Derived directly from markdown metadata.</p>
+</div>
 <div class="table-wrap">
 <table>
 <thead>
@@ -21,18 +40,18 @@
 </thead>
 <tbody>
 <tr>
-<td><a href="issues/001-llm-retry-backoff.html">#001</a></td>
-<td><a href="issues/001-llm-retry-backoff.html">LLM Call Retry with Exponential Backoff</a></td>
-<td>Open</td>
-<td>High</td>
+<td><a class="issue-link" href="issues/001-llm-retry-backoff.html">#001</a></td>
+<td><a class="issue-link title-link" href="issues/001-llm-retry-backoff.html">LLM Call Retry with Exponential Backoff</a></td>
+<td><span class="pill pill-open">Open</span></td>
+<td><span class="pill pill-high">High</span></td>
 <td><a href="issues/002-model-provider-switcher.html">#002</a></td>
 <td>—</td>
 </tr>
 <tr>
-<td><a href="issues/002-model-provider-switcher.html">#002</a></td>
-<td><a href="issues/002-model-provider-switcher.html">Model/Provider Switcher for Sessions</a></td>
-<td>Open</td>
-<td>High</td>
+<td><a class="issue-link" href="issues/002-model-provider-switcher.html">#002</a></td>
+<td><a class="issue-link title-link" href="issues/002-model-provider-switcher.html">Model/Provider Switcher for Sessions</a></td>
+<td><span class="pill pill-open">Open</span></td>
+<td><span class="pill pill-high">High</span></td>
 <td>—</td>
 <td><a href="issues/001-llm-retry-backoff.html">#001</a></td>
 </tr>
@@ -43,8 +62,8 @@
 <article class="issue-card">
 <h3><a href="issues/001-llm-retry-backoff.html">#001 LLM Call Retry with Exponential Backoff</a></h3>
 <div class="issue-card-meta">
-<div><span class="label">Status</span><span>Open</span></div>
-<div><span class="label">Priority</span><span>High</span></div>
+<div><span class="label">Status</span><span class="pill pill-open">Open</span></div>
+<div><span class="label">Priority</span><span class="pill pill-high">High</span></div>
 <div><span class="label">Depends On</span><span><a href="issues/002-model-provider-switcher.html">#002</a></span></div>
 <div><span class="label">Blocks</span><span>—</span></div>
 </div>
@@ -52,34 +71,37 @@
 <article class="issue-card">
 <h3><a href="issues/002-model-provider-switcher.html">#002 Model/Provider Switcher for Sessions</a></h3>
 <div class="issue-card-meta">
-<div><span class="label">Status</span><span>Open</span></div>
-<div><span class="label">Priority</span><span>High</span></div>
+<div><span class="label">Status</span><span class="pill pill-open">Open</span></div>
+<div><span class="label">Priority</span><span class="pill pill-high">High</span></div>
 <div><span class="label">Depends On</span><span>—</span></div>
 <div><span class="label">Blocks</span><span><a href="issues/001-llm-retry-backoff.html">#001</a></span></div>
 </div>
 </article>
 </div>
 </section>
-<section class="card">
+<section id="dependency-map" class="panel">
+<div class="section-head">
 <h2>Dependency Graph</h2>
-<p class="muted">Arrows point from prerequisite issue to dependent issue.</p>
+<p class="muted">Arrows run from prerequisite issue to dependent issue.</p>
+</div>
 <div class="graph-wrap">
-<svg class="dep-graph" viewBox="0 0 608 120" role="img" aria-label="Issue dependency graph">
+<svg class="dep-graph" viewBox="0 0 712 148" role="img" aria-label="Issue dependency graph">
 <defs>
 <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
 <path d="M 0 0 L 10 5 L 0 10 z" class="graph-arrow" />
 </marker>
 </defs>
 <g>
-<path d="M 244 58 C 304 58, 304 58, 364 58" class="graph-edge" marker-end="url(#arrow)" />
+<path d="M 308 74 C 356 74, 356 74, 404 74" class="graph-edge" marker-end="url(#arrow)" />
 </g>
 <g>
-<a href="issues/001-llm-retry-backoff.html"><rect x="364" y="24" width="220" height="68" rx="12" class="graph-node" /><text x="378" y="50" class="graph-id">#001</text><text x="378" y="70" class="graph-title">LLM Call Retry with Exponential...</text></a>
-<a href="issues/002-model-provider-switcher.html"><rect x="24" y="24" width="220" height="68" rx="12" class="graph-node" /><text x="38" y="50" class="graph-id">#002</text><text x="38" y="70" class="graph-title">Model/Provider Switcher for Ses...</text></a>
+<a href="issues/001-llm-retry-backoff.html"><rect x="404" y="28" width="280" height="92" rx="3" class="graph-node" /><text x="422" y="59" class="graph-id">Issue #001</text><text x="422" y="84" class="graph-title">LLM Call Retry with Exponential B...</text><text x="422" y="104" class="graph-status">Open</text></a>
+<a href="issues/002-model-provider-switcher.html"><rect x="28" y="28" width="280" height="92" rx="3" class="graph-node" /><text x="46" y="59" class="graph-id">Issue #002</text><text x="46" y="84" class="graph-title">Model/Provider Switcher for Sessions</text><text x="46" y="104" class="graph-status">Open</text></a>
 </g>
 </svg>
 </div>
 </section>
 </main>
+</div>
 </body>
 </html>

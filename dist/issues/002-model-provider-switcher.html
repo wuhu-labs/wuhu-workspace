@@ -7,13 +7,25 @@
 <link rel="stylesheet" href="../styles.css" />
 </head>
 <body>
-<main class="container">
+<div class="site-shell">
+<header class="site-header">
+<a class="brand" href="../index.html">Wuhu <span>Issue Tracker</span></a>
+<nav class="site-nav">
+<a href="../index.html">Issues</a>
+<a href="../index.html#dependency-map">Dependencies</a>
+</nav>
+</header>
+<main class="page">
 <nav class="crumbs"><a href="../index.html">All Issues</a></nav>
-<article class="card issue">
-<h1>#002 Model/Provider Switcher for Sessions</h1>
+<header class="page-intro issue-intro">
+<p class="kicker">Issue #002</p>
+<h1>Model/Provider Switcher for Sessions</h1>
+<p class="lede">Status <span class="pill pill-open">Open</span> with <span class="pill pill-high">High</span> priority.</p>
+</header>
+<article class="panel issue">
 <div class="meta-grid">
-<div><span class="label">Status</span><span>Open</span></div>
-<div><span class="label">Priority</span><span>High</span></div>
+<div><span class="label">Status</span><span class="pill pill-open">Open</span></div>
+<div><span class="label">Priority</span><span class="pill pill-high">High</span></div>
 <div><span class="label">Depends On</span><span>—</span></div>
 <div><span class="label">Blocks</span><span><a href="001-llm-retry-backoff.html">#001</a></span></div>
 </div>
@@ -50,5 +62,6 @@
 </section>
 </article>
 </main>
+</div>
 </body>
 </html>

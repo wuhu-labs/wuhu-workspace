@@ -21,6 +21,14 @@ function stripMdExtension(fileName) {
   return fileName.replace(/\.md$/i, '');
 }
 
+function toToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'unknown';
+}
+
 function parseIssueId(fileName) {
   const match = fileName.match(/^(\d{3})-/);
   return match ? match[1] : stripMdExtension(fileName);
@@ -296,11 +304,11 @@ function renderDependencyGraph(issues) {
     columns.get(key).sort((a, b) => a.id.localeCompare(b.id));
   }
 
-  const nodeWidth = 220;
-  const nodeHeight = 68;
-  const colGap = 120;
-  const rowGap = 28;
-  const margin = 24;
+  const nodeWidth = 280;
+  const nodeHeight = 92;
+  const colGap = 96;
+  const rowGap = 34;
+  const margin = 28;
 
   const positions = new Map();
   let maxRows = 0;
@@ -346,12 +354,13 @@ function renderDependencyGraph(issues) {
       const pos = positions.get(issue.id);
       const x = pos.x;
       const y = pos.y;
-      const title = issue.title.length > 34 ? `${issue.title.slice(0, 31)}...` : issue.title;
+      const title = issue.title.length > 36 ? `${issue.title.slice(0, 33)}...` : issue.title;
       return [
         `<a href="issues/${escapeHtml(issue.slug)}.html">`,
-        `<rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="12" class="graph-node" />`,
-        `<text x="${x + 14}" y="${y + 26}" class="graph-id">#${escapeHtml(issue.id)}</text>`,
-        `<text x="${x + 14}" y="${y + 46}" class="graph-title">${escapeHtml(title)}</text>`,
+        `<rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="3" class="graph-node" />`,
+        `<text x="${x + 18}" y="${y + 31}" class="graph-id">Issue #${escapeHtml(issue.id)}</text>`,
+        `<text x="${x + 18}" y="${y + 56}" class="graph-title">${escapeHtml(title)}</text>`,
+        `<text x="${x + 18}" y="${y + 76}" class="graph-status">${escapeHtml(issue.status)}</text>`,
         '</a>'
       ].join('');
     })
@@ -403,9 +412,18 @@ function renderLayout({ title, content, rootPath }) {
     `<link rel="stylesheet" href="${rootPath}styles.css" />`,
     '</head>',
     '<body>',
-    '<main class="container">',
+    '<div class="site-shell">',
+    '<header class="site-header">',
+    `<a class="brand" href="${rootPath}index.html">Wuhu <span>Issue Tracker</span></a>`,
+    '<nav class="site-nav">',
+    `<a href="${rootPath}index.html">Issues</a>`,
+    `<a href="${rootPath}index.html#dependency-map">Dependencies</a>`,
+    '</nav>',
+    '</header>',
+    '<main class="page">',
     content,
     '</main>',
+    '</div>',
     '</body>',
     '</html>'
   ].join('\n');
@@ -413,14 +431,19 @@ function renderLayout({ title, content, rootPath }) {
 
 function renderIndexPage(issues) {
   const issueById = getIssueByIdMap(issues);
+  const openCount = issues.filter((issue) => toToken(issue.status) === 'open').length;
+  const blockedCount = issues.filter((issue) => issue.dependsOnIds.length > 0).length;
+  const readyCount = issues.filter((issue) => issue.dependsOnIds.length === 0).length;
+  const highPriorityCount = issues.filter((issue) => toToken(issue.priority) === 'high').length;
+
   const rows = issues
     .map((issue) => {
       return [
         '<tr>',
-        `<td><a href="issues/${escapeHtml(issue.slug)}.html">#${escapeHtml(issue.id)}</a></td>`,
-        `<td><a href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(issue.title)}</a></td>`,
-        `<td>${escapeHtml(issue.status)}</td>`,
-        `<td>${escapeHtml(issue.priority)}</td>`,
+        `<td><a class="issue-link" href="issues/${escapeHtml(issue.slug)}.html">#${escapeHtml(issue.id)}</a></td>`,
+        `<td><a class="issue-link title-link" href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(issue.title)}</a></td>`,
+        `<td><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></td>`,
+        `<td><span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span></td>`,
         `<td>${linkIssueIds(issue.dependsOnIds, issueById, 'index')}</td>`,
         `<td>${linkIssueIds(issue.blocksIds, issueById, 'index')}</td>`,
         '</tr>'
@@ -433,8 +456,8 @@ function renderIndexPage(issues) {
         '<article class="issue-card">',
         `<h3><a href="issues/${escapeHtml(issue.slug)}.html">#${escapeHtml(issue.id)} ${escapeHtml(issue.title)}</a></h3>`,
         '<div class="issue-card-meta">',
-        `<div><span class="label">Status</span><span>${escapeHtml(issue.status)}</span></div>`,
-        `<div><span class="label">Priority</span><span>${escapeHtml(issue.priority)}</span></div>`,
+        `<div><span class="label">Status</span><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></div>`,
+        `<div><span class="label">Priority</span><span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span></div>`,
         `<div><span class="label">Depends On</span><span>${linkIssueIds(issue.dependsOnIds, issueById, 'index')}</span></div>`,
         `<div><span class="label">Blocks</span><span>${linkIssueIds(issue.blocksIds, issueById, 'index')}</span></div>`,
         '</div>',
@@ -446,12 +469,23 @@ function renderIndexPage(issues) {
   const graph = renderDependencyGraph(issues);
 
   const content = [
-    '<header class="header">',
-    '<h1>Wuhu Issue Tracker</h1>',
-    '<p class="muted">Static site generated from markdown issues.</p>',
+    '<header class="page-intro">',
+    '<p class="kicker">Project Overview</p>',
+    '<h1>Build priorities with clear dependency flow.</h1>',
+    '<p class="lede">A lightweight static tracker with Scandinavian-style restraint: fewer colors, stronger hierarchy, and room for decisions to breathe.</p>',
+    '<div class="stats-grid">',
+    `<article class="stat"><p class="label">Total issues</p><p class="stat-value">${issues.length}</p></article>`,
+    `<article class="stat"><p class="label">Open</p><p class="stat-value">${openCount}</p></article>`,
+    `<article class="stat"><p class="label">Ready now</p><p class="stat-value">${readyCount}</p></article>`,
+    `<article class="stat"><p class="label">Blocked</p><p class="stat-value">${blockedCount}</p></article>`,
+    `<article class="stat"><p class="label">High priority</p><p class="stat-value">${highPriorityCount}</p></article>`,
+    '</div>',
     '</header>',
-    '<section class="card">',
-    '<h2>Issues</h2>',
+    '<section class="panel">',
+    '<div class="section-head">',
+    '<h2>Issue Index</h2>',
+    '<p class="muted">Derived directly from markdown metadata.</p>',
+    '</div>',
     '<div class="table-wrap">',
     '<table>',
     '<thead>',
@@ -466,9 +500,11 @@ function renderIndexPage(issues) {
     mobileCards,
     '</div>',
     '</section>',
-    '<section class="card">',
+    '<section id="dependency-map" class="panel">',
+    '<div class="section-head">',
     '<h2>Dependency Graph</h2>',
-    '<p class="muted">Arrows point from prerequisite issue to dependent issue.</p>',
+    '<p class="muted">Arrows run from prerequisite issue to dependent issue.</p>',
+    '</div>',
     graph,
     '</section>'
   ].join('\n');
@@ -486,11 +522,15 @@ function renderIssuePage(issue, issueById) {
 
   const content = [
     '<nav class="crumbs"><a href="../index.html">All Issues</a></nav>',
-    '<article class="card issue">',
-    `<h1>#${escapeHtml(issue.id)} ${escapeHtml(issue.title)}</h1>`,
+    '<header class="page-intro issue-intro">',
+    `<p class="kicker">Issue #${escapeHtml(issue.id)}</p>`,
+    `<h1>${escapeHtml(issue.title)}</h1>`,
+    `<p class="lede">Status <span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span> with <span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span> priority.</p>`,
+    '</header>',
+    '<article class="panel issue">',
     '<div class="meta-grid">',
-    `<div><span class="label">Status</span><span>${escapeHtml(issue.status)}</span></div>`,
-    `<div><span class="label">Priority</span><span>${escapeHtml(issue.priority)}</span></div>`,
+    `<div><span class="label">Status</span><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></div>`,
+    `<div><span class="label">Priority</span><span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span></div>`,
     `<div><span class="label">Depends On</span><span>${depends}</span></div>`,
     `<div><span class="label">Blocks</span><span>${blocks}</span></div>`,
     '</div>',
@@ -511,13 +551,18 @@ function renderIssuePage(issue, issueById) {
 function writeStyles() {
   const css = `:root {
   color-scheme: dark;
-  --bg: #0f1115;
-  --card: #161a22;
-  --muted: #a6b0c0;
-  --text: #e8edf7;
-  --line: #2a3140;
-  --accent: #7dd3fc;
-  --accent-soft: rgba(125, 211, 252, 0.18);
+  --bg: #070707;
+  --bg-elevated: #111112;
+  --panel: #151516;
+  --panel-soft: #1b1b1d;
+  --text: #f2f2ed;
+  --text-strong: #ffffff;
+  --muted: #a1a29d;
+  --line: rgba(255, 255, 255, 0.16);
+  --line-soft: rgba(255, 255, 255, 0.09);
+  --accent: #d1d4d0;
+  --accent-strong: #f5f6f2;
+  --shadow: 0 30px 80px rgba(0, 0, 0, 0.52);
 }
 
 * {
@@ -527,50 +572,196 @@ function writeStyles() {
 html,
 body {
   margin: 0;
+  min-height: 100%;
+}
+
+body {
+  position: relative;
   padding: 0;
-  background: radial-gradient(circle at top right, #1b2130 0%, #0f1115 45%);
+  background:
+    radial-gradient(1100px 700px at 8% -15%, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 55%),
+    radial-gradient(900px 620px at 92% -18%, rgba(212, 220, 255, 0.12) 0%, rgba(212, 220, 255, 0) 52%),
+    linear-gradient(180deg, #111112 0%, #090909 46%, #050505 100%);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.6;
+  font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: radial-gradient(circle at center, #000 18%, transparent 82%);
+}
+
+.site-shell {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1240px);
+  margin: 0 auto;
+  padding: 2.2rem 1.25rem 5rem;
+}
+
+.site-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2.6rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.brand {
+  color: var(--text-strong);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-size: 0.92rem;
+}
+
+.brand span {
+  color: var(--muted);
+  margin-left: 0.4rem;
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.site-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.88rem;
+  letter-spacing: 0.02em;
+}
+
+.site-nav a:hover {
+  color: var(--text-strong);
 }
 
 a {
-  color: var(--accent);
+  color: var(--accent-strong);
   text-decoration: none;
+  transition: color 160ms ease;
 }
 
 a:hover {
-  text-decoration: underline;
+  color: var(--text-strong);
 }
 
-.container {
-  width: min(100%, 960px);
-  margin: 0 auto;
-  padding: 1rem;
+.page {
+  display: grid;
+  gap: 2.2rem;
 }
 
-.header {
-  margin: 1.5rem 0 1rem;
+.page-intro {
+  width: min(100%, 820px);
+  margin: 0;
+}
+
+.page-intro h1 {
+  margin: 0;
+  font-size: clamp(2.2rem, 4vw, 4.15rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.034em;
+  text-wrap: balance;
+}
+
+.kicker {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.lede {
+  margin: 1.25rem 0 0;
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: 1.06rem;
+  line-height: 1.58;
+}
+
+.stats-grid {
+  margin-top: 2.2rem;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.stat {
+  border: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  padding: 0.9rem 1rem;
+}
+
+.stat .label {
+  margin-bottom: 0.55rem;
+}
+
+.stat-value {
+  margin: 0;
+  font-size: 1.6rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text-strong);
 }
 
 h1,
 h2,
 h3 {
-  line-height: 1.25;
+  line-height: 1.1;
   margin-top: 0;
+  margin-bottom: 0;
+  letter-spacing: -0.02em;
 }
 
-.card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0.02));
+h2 {
+  font-size: clamp(1.4rem, 2vw, 2.1rem);
+  font-weight: 420;
+}
+
+h3 {
+  font-size: 1.12rem;
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.panel {
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 1rem;
-  margin: 1rem 0;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.005)),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.02), transparent 32%);
+  padding: 1.55rem;
+  box-shadow: var(--shadow);
+}
+
+.section-head {
+  margin-bottom: 1.25rem;
+}
+
+.section-head p {
+  margin: 0.7rem 0 0;
 }
 
 .table-wrap {
   overflow-x: auto;
+  border: 1px solid var(--line-soft);
 }
 
 .issue-list-mobile {
@@ -580,160 +771,312 @@ h3 {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 680px;
+  min-width: 760px;
+  background: rgba(8, 8, 8, 0.45);
 }
 
 th,
 td {
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-soft);
   text-align: left;
-  padding: 0.65rem 0.5rem;
+  padding: 0.78rem 0.75rem;
   vertical-align: top;
 }
 
 th {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.13em;
+  font-weight: 500;
+}
+
+tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+td {
+  font-size: 0.96rem;
+}
+
+.issue-link {
+  color: var(--accent-strong);
+  font-weight: 450;
+}
+
+.title-link {
+  color: var(--text);
 }
 
 .issue-card {
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 0.8rem;
-  background: rgba(255, 255, 255, 0.01);
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.012));
 }
 
 .issue-card h3 {
-  margin: 0 0 0.7rem;
+  margin: 0 0 0.85rem;
   font-size: 1rem;
 }
 
 .issue-card-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.6rem;
+  gap: 0.68rem;
 }
 
 .issue-card-meta div {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.55rem 0.6rem;
-  background: rgba(0, 0, 0, 0.12);
-}
-
-.muted {
-  color: var(--muted);
+  border: 1px solid var(--line-soft);
+  padding: 0.62rem 0.68rem;
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .crumbs {
-  margin: 1rem 0;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  font-size: 0.73rem;
 }
 
 .meta-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.4rem;
 }
 
 .meta-grid div {
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.6rem 0.7rem;
-  background: rgba(255, 255, 255, 0.01);
+  border: 1px solid var(--line-soft);
+  padding: 0.72rem 0.8rem;
+  background: rgba(0, 0, 0, 0.22);
 }
 
 .label {
   display: block;
   color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 0.34rem;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
+  padding: 0.14rem 0.56rem;
+  border: 1px solid var(--line);
+  color: var(--text);
   font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.2rem;
+  letter-spacing: 0.08em;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.pill-open {
+  border-color: rgba(232, 244, 216, 0.48);
+  background: rgba(181, 211, 132, 0.17);
+  color: #e7f0d7;
+}
+
+.pill-high {
+  border-color: rgba(255, 208, 192, 0.56);
+  background: rgba(255, 154, 123, 0.2);
+  color: #ffe5d8;
+}
+
+.issue-intro {
+  margin-top: -0.1rem;
 }
 
 .md-content h1,
 .md-content h2,
 .md-content h3 {
-  margin-top: 1.2rem;
+  margin-top: 2.1rem;
+  margin-bottom: 0.8rem;
+  font-weight: 450;
+  letter-spacing: -0.02em;
+}
+
+.md-content h1 {
+  font-size: 1.85rem;
+}
+
+.md-content h2 {
+  font-size: 1.35rem;
+}
+
+.md-content h3 {
+  font-size: 1.06rem;
 }
 
 .md-content p,
 .md-content ul,
 .md-content ol {
-  margin: 0.8rem 0;
+  margin: 0.94rem 0;
+  color: #d8d8d2;
+  line-height: 1.66;
+  max-width: 74ch;
+}
+
+.md-content ul,
+.md-content ol {
+  padding-left: 1.2rem;
 }
 
 .md-content pre {
-  background: #0a0d12;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 0.85rem;
+  background: linear-gradient(180deg, #0b0b0c, #0a0a0a);
+  border: 1px solid var(--line-soft);
+  padding: 1rem 1.06rem;
   overflow-x: auto;
+  max-width: 100%;
 }
 
 .md-content code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+}
+
+.md-content pre code {
+  color: #ecece7;
+}
+
+.md-content :not(pre) > code {
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.07rem 0.38rem;
 }
 
 .graph-wrap {
   width: 100%;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
+  border: 1px solid var(--line-soft);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.44), rgba(0, 0, 0, 0.2));
+  padding: 0.45rem;
 }
 
 .dep-graph {
   width: 100%;
-  min-width: 400px;
+  min-width: 640px;
   height: auto;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(125, 211, 252, 0.03), rgba(125, 211, 252, 0.01));
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.05), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0.02));
 }
 
 .graph-node {
-  fill: #141a24;
-  stroke: #39475f;
-  stroke-width: 1.3;
+  fill: #131315;
+  stroke: rgba(255, 255, 255, 0.27);
+  stroke-width: 1;
+  transition: fill 150ms ease, stroke 150ms ease;
+}
+
+.dep-graph a:hover .graph-node {
+  fill: #1b1c20;
+  stroke: rgba(255, 255, 255, 0.4);
 }
 
 .graph-edge {
   fill: none;
-  stroke: #5b6f8f;
-  stroke-width: 1.8;
+  stroke: rgba(229, 234, 255, 0.44);
+  stroke-width: 1.7;
 }
 
 .graph-arrow {
-  fill: #5b6f8f;
+  fill: rgba(229, 234, 255, 0.44);
 }
 
 .graph-id {
-  fill: var(--accent);
-  font-size: 14px;
-  font-weight: 600;
+  fill: #cad0ca;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .graph-title {
-  fill: var(--text);
-  font-size: 12px;
+  fill: #f2f2ee;
+  font-size: 14px;
+}
+
+.graph-status {
+  fill: #8f918d;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
 }
 
 hr {
   border: none;
-  border-top: 1px solid var(--line);
-  margin: 1rem 0;
+  border-top: 1px solid var(--line-soft);
+  margin: 1.2rem 0;
 }
 
-@media (max-width: 720px) {
-  .container {
-    padding: 0.8rem;
+@media (prefers-reduced-motion: no-preference) {
+  .page > * {
+    animation: rise 560ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   }
 
-  .card {
-    padding: 0.85rem;
-    border-radius: 12px;
+  .page > *:nth-child(2) {
+    animation-delay: 70ms;
+  }
+
+  .page > *:nth-child(3) {
+    animation-delay: 120ms;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (max-width: 1024px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .site-shell {
+    padding: 1.2rem 0.85rem 2.8rem;
+  }
+
+  .site-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1.55rem;
+  }
+
+  .page {
+    gap: 1.35rem;
+  }
+
+  .page-intro h1 {
+    font-size: clamp(1.82rem, 8.8vw, 2.54rem);
+    line-height: 1.04;
+  }
+
+  .lede {
+    font-size: 1rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.62rem;
+    margin-top: 1.4rem;
+  }
+
+  .panel {
+    padding: 1rem;
   }
 
   .table-wrap {
@@ -742,7 +1085,7 @@ hr {
 
   .issue-list-mobile {
     display: grid;
-    gap: 0.7rem;
+    gap: 0.68rem;
   }
 
   .issue-card-meta {
@@ -751,15 +1094,11 @@ hr {
 
   .meta-grid {
     grid-template-columns: 1fr;
+    margin-bottom: 1rem;
   }
 
   .dep-graph {
-    min-width: 320px;
-  }
-
-  th,
-  td {
-    padding: 0.55rem 0.45rem;
+    min-width: 560px;
   }
 }
 `;
