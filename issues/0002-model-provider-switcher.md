@@ -1,9 +1,8 @@
-# Model/Provider Switcher for Sessions
-
-**Status:** Open  
-**Priority:** High  
-**Depends on:** None  
-**Blocks:** [001 - LLM Retry with Backoff](001-llm-retry-backoff.md)
+---
+title: Model/Provider Switcher for Sessions
+status: open
+depends_on: []
+---
 
 ## Summary
 
@@ -17,7 +16,7 @@ Add functionality to change a session's model and/or provider mid-conversation.
 
 ## Context
 
-This is needed for manual testing of the retry logic (issue #001). The test flow requires:
+This is needed for manual testing of the retry logic (WUHU-0001). The test flow requires:
 
 1. Create a session
 2. Have one turn of conversation

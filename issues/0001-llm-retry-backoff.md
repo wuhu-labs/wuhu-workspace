@@ -1,8 +1,9 @@
-# LLM Call Retry with Exponential Backoff
-
-**Status:** Open  
-**Priority:** High  
-**Depends on:** [002 - Model/Provider Switcher](002-model-provider-switcher.md)
+---
+title: LLM Call Retry with Exponential Backoff
+status: open
+depends_on:
+  - 2
+---
 
 ## Summary
 
@@ -31,7 +32,7 @@ From the postmortem of session `2a5cbaaa-8268-460d-9a07-aa172a89991d`: the LLM s
 ### Manual Testing
 1. Start a session with a valid model
 2. Have one turn of conversation (baseline)
-3. Switch model to a non-existent one (e.g., `gpt-404`) using issue #002's functionality
+3. Switch model to a non-existent one (e.g., `gpt-404`) using WUHU-0002's functionality
 4. Trigger a prompt
 5. Observe:
    - Retry attempts in server logs

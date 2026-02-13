@@ -29,26 +29,27 @@ function toToken(value) {
     .replace(/^-+|-+$/g, '') || 'unknown';
 }
 
-function parseIssueId(fileName) {
-  const match = fileName.match(/^(\d{3})-/);
-  return match ? match[1] : stripMdExtension(fileName);
-}
-
-function extractIdsFromValue(value) {
-  const ids = new Set();
-  const linkMatches = value.matchAll(/\(([^)]+\.md)\)/g);
-  for (const match of linkMatches) {
-    const base = path.basename(match[1]);
-    const id = parseIssueId(base);
-    if (id) {
-      ids.add(id);
-    }
+function parseIssueFileName(fileName) {
+  if (!fileName.endsWith('.md')) {
+    throw new Error(`Issue file must be .md: ${fileName}`);
   }
-  const idMatches = value.matchAll(/\b(\d{3})\b/g);
-  for (const match of idMatches) {
-    ids.add(match[1]);
+  const base = path.basename(fileName);
+  const match = base.match(/^(\d{4})-([^.]+)\.md$/);
+  if (!match) {
+    throw new Error(
+      `Issue file must match "[digits]-[title].md" with exactly 4 digits: ${fileName}`
+    );
   }
-  return Array.from(ids);
+  const idText = match[1];
+  const number = Number.parseInt(idText, 10);
+  if (!Number.isInteger(number) || number < 0) {
+    throw new Error(`Invalid issue id number in filename: ${fileName}`);
+  }
+  return {
+    idText,
+    number,
+    slug: stripMdExtension(base)
+  };
 }
 
 function normalizeLink(url, pageType) {
@@ -63,6 +64,10 @@ function normalizeLink(url, pageType) {
   }
 
   return url;
+}
+
+function issueHref(issue, pageType) {
+  return pageType === 'index' ? `issues/${issue.slug}.html` : `${issue.slug}.html`;
 }
 
 function renderInline(text, pageType) {
@@ -192,47 +197,146 @@ function renderMarkdown(markdown, pageType) {
   return out.join('\n');
 }
 
-function parseIssue(fileName, markdown) {
-  const slug = stripMdExtension(fileName);
-  const id = parseIssueId(fileName);
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-
-  let title = slug;
-  if (lines[0] && lines[0].startsWith('# ')) {
-    title = lines[0].replace(/^#\s+/, '').trim();
+function splitFrontMatter(markdown, fileName) {
+  const normalized = markdown.replace(/\r\n/g, '\n');
+  if (!normalized.startsWith('---\n')) {
+    throw new Error(`Missing YAML front matter (expected leading ---): ${fileName}`);
   }
+  const lines = normalized.split('\n');
+  let endIndex = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '---') {
+      endIndex = i;
+      break;
+    }
+  }
+  if (endIndex === -1) {
+    throw new Error(`Unterminated YAML front matter (missing closing ---): ${fileName}`);
+  }
+  const yamlLines = lines.slice(1, endIndex);
+  const bodyLines = lines.slice(endIndex + 1);
+  const body = bodyLines.join('\n').replace(/^\n+/, '');
+  return { yaml: yamlLines.join('\n'), body };
+}
 
+function parseIssueFrontMatter(yaml, fileName) {
+  const allowedKeys = new Set(['title', 'status', 'depends_on']);
   const metadata = {};
-  for (const line of lines) {
-    const match = line.match(/^\*\*([^*]+):\*\*\s*(.+)$/);
-    if (match) {
-      const key = match[1].trim().toLowerCase();
-      metadata[key] = match[2].trim();
+  let currentKey = null;
+
+  const yamlLines = yaml.split('\n');
+  for (let i = 0; i < yamlLines.length; i++) {
+    const rawLine = yamlLines[i];
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed.startsWith('#')) {
+      continue;
     }
+
+    if (/^\s+-\s+/.test(rawLine)) {
+      if (currentKey !== 'depends_on') {
+        throw new Error(`Unexpected list item in front matter (${fileName}:${i + 1})`);
+      }
+      const value = trimmed.replace(/^-+\s+/, '').trim();
+      if (!metadata.depends_on) {
+        metadata.depends_on = [];
+      }
+      metadata.depends_on.push(value);
+      continue;
+    }
+
+    const match = rawLine.match(/^([A-Za-z0-9_]+)\s*:\s*(.*)$/);
+    if (!match) {
+      throw new Error(`Invalid YAML front matter line (${fileName}:${i + 1}): ${rawLine}`);
+    }
+
+    const key = match[1];
+    const value = match[2];
+    if (!allowedKeys.has(key)) {
+      throw new Error(`Unknown front matter key "${key}" in ${fileName}`);
+    }
+    currentKey = key;
+
+    if (key === 'depends_on') {
+      if (!value) {
+        metadata.depends_on = [];
+        continue;
+      }
+      const inline = value.trim();
+      if (inline === '[]') {
+        metadata.depends_on = [];
+        continue;
+      }
+      const arrayMatch = inline.match(/^\[(.*)\]$/);
+      if (!arrayMatch) {
+        throw new Error(`depends_on must be a YAML array in ${fileName}`);
+      }
+      const inner = arrayMatch[1].trim();
+      if (!inner) {
+        metadata.depends_on = [];
+        continue;
+      }
+      metadata.depends_on = inner.split(',').map((item) => item.trim());
+      continue;
+    }
+
+    const scalar = value.trim();
+    if (!scalar) {
+      throw new Error(`Front matter "${key}" must not be empty in ${fileName}`);
+    }
+    const unquoted = scalar.replace(/^['"]|['"]$/g, '');
+    metadata[key] = unquoted;
   }
 
-  const dependsOnValue = metadata['depends on'] || metadata['depends on '] || 'None';
-  const blocksValue = metadata['blocks'] || 'None';
-  const dependsOnIds = /^(none|—)$/i.test(dependsOnValue) ? [] : extractIdsFromValue(dependsOnValue);
-  const blocksIds = /^(none|—)$/i.test(blocksValue) ? [] : extractIdsFromValue(blocksValue);
-  const bodyLines = lines.filter((line, index) => {
-    if (index === 0 && line.startsWith('# ')) {
-      return false;
-    }
-    return !/^\*\*([^*]+):\*\*\s*(.+)$/.test(line);
-  });
-  const bodyMarkdown = bodyLines.join('\n').trim();
+  if (!metadata.title) {
+    throw new Error(`Front matter must include "title" in ${fileName}`);
+  }
+  if (!metadata.status) {
+    throw new Error(`Front matter must include "status" in ${fileName}`);
+  }
+  const statusToken = String(metadata.status).trim().toLowerCase();
+  if (statusToken !== 'open' && statusToken !== 'closed') {
+    throw new Error(`status must be "open" or "closed" in ${fileName}`);
+  }
+
+  const dependsOnRaw = metadata.depends_on || [];
+  if (!Array.isArray(dependsOnRaw)) {
+    throw new Error(`depends_on must be an array in ${fileName}`);
+  }
+  const dependsOnNumbers = dependsOnRaw
+    .filter((value) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map((value) => {
+      const asNumber = Number.parseInt(String(value).trim(), 10);
+      if (!Number.isInteger(asNumber)) {
+        throw new Error(`depends_on must contain integers in ${fileName}`);
+      }
+      return asNumber;
+    });
+
+  const unique = Array.from(new Set(dependsOnNumbers)).sort((a, b) => a - b);
 
   return {
-    id,
-    slug,
-    title,
-    status: metadata.status || 'Unknown',
-    priority: metadata.priority || 'Unknown',
-    dependsOnIds,
-    blocksIds,
+    title: String(metadata.title).trim(),
+    status: statusToken === 'open' ? 'Open' : 'Closed',
+    dependsOnNumbers: unique
+  };
+}
+
+function parseIssue(fileName, markdown) {
+  const fileInfo = parseIssueFileName(fileName);
+  const { yaml, body } = splitFrontMatter(markdown, fileName);
+  const metadata = parseIssueFrontMatter(yaml, fileName);
+  const bodyMarkdown = body.trim();
+
+  return {
+    idText: fileInfo.idText,
+    number: fileInfo.number,
+    slug: fileInfo.slug,
+    title: metadata.title,
+    status: metadata.status,
+    dependsOnNumbers: metadata.dependsOnNumbers,
+    blocksNumbers: [],
     markdown,
-    bodyHtml: renderMarkdown(bodyMarkdown, 'issue')
+    bodyMarkdown
   };
 }
 
@@ -240,38 +344,90 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function getIssueByIdMap(issues) {
+function formatIssueKey(idText) {
+  return `WUHU-${idText}`;
+}
+
+function formatIssueKeyFromNumber(number) {
+  return `WUHU-${String(number).padStart(4, '0')}`;
+}
+
+function getIssueByNumberMap(issues) {
   const map = new Map();
   for (const issue of issues) {
-    map.set(issue.id, issue);
+    map.set(issue.number, issue);
   }
   return map;
 }
 
-function computeLevels(issues, issueById) {
+function verifyIssues(issues, issueFiles) {
+  const seen = new Set();
+  for (let i = 0; i < issues.length; i++) {
+    const issue = issues[i];
+    if (seen.has(issue.number)) {
+      throw new Error(`Duplicate issue number ${formatIssueKey(issue.idText)}`);
+    }
+    seen.add(issue.number);
+    if (!issue.title || !issue.title.trim()) {
+      throw new Error(`Missing title for ${issueFiles[i]}`);
+    }
+    if (issue.dependsOnNumbers.includes(issue.number)) {
+      throw new Error(`Issue ${formatIssueKey(issue.idText)} cannot depend on itself`);
+    }
+  }
+}
+
+function assignBlocksAndVerifyDeps(issues) {
+  const issueByNumber = getIssueByNumberMap(issues);
+  const blocksByNumber = new Map();
+
+  for (const issue of issues) {
+    for (const dep of issue.dependsOnNumbers) {
+      const target = issueByNumber.get(dep);
+      if (!target) {
+        throw new Error(
+          `Unknown dependency ${formatIssueKeyFromNumber(dep)} referenced by ${formatIssueKey(issue.idText)}`
+        );
+      }
+      if (!blocksByNumber.has(dep)) {
+        blocksByNumber.set(dep, []);
+      }
+      blocksByNumber.get(dep).push(issue.number);
+    }
+  }
+
+  for (const issue of issues) {
+    const blocks = blocksByNumber.get(issue.number) || [];
+    issue.blocksNumbers = Array.from(new Set(blocks)).sort((a, b) => a - b);
+  }
+
+  return issueByNumber;
+}
+
+function computeLevels(issues, issueByNumber) {
   const cache = new Map();
   const visiting = new Set();
 
   function levelFor(issue) {
-    if (cache.has(issue.id)) {
-      return cache.get(issue.id);
+    if (cache.has(issue.number)) {
+      return cache.get(issue.number);
     }
-    if (visiting.has(issue.id)) {
+    if (visiting.has(issue.number)) {
       return 0;
     }
-    visiting.add(issue.id);
+    visiting.add(issue.number);
 
     let level = 0;
-    for (const depId of issue.dependsOnIds) {
-      const dep = issueById.get(depId);
+    for (const depNumber of issue.dependsOnNumbers) {
+      const dep = issueByNumber.get(depNumber);
       if (!dep) {
         continue;
       }
       level = Math.max(level, levelFor(dep) + 1);
     }
 
-    visiting.delete(issue.id);
-    cache.set(issue.id, level);
+    visiting.delete(issue.number);
+    cache.set(issue.number, level);
     return level;
   }
 
@@ -287,12 +443,12 @@ function renderDependencyGraph(issues) {
     return '<p class="muted">No issues found.</p>';
   }
 
-  const issueById = getIssueByIdMap(issues);
-  const levels = computeLevels(issues, issueById);
+  const issueByNumber = getIssueByNumberMap(issues);
+  const levels = computeLevels(issues, issueByNumber);
   const columns = new Map();
 
   for (const issue of issues) {
-    const level = levels.get(issue.id) || 0;
+    const level = levels.get(issue.number) || 0;
     if (!columns.has(level)) {
       columns.set(level, []);
     }
@@ -301,7 +457,7 @@ function renderDependencyGraph(issues) {
 
   const sortedColumnKeys = Array.from(columns.keys()).sort((a, b) => a - b);
   for (const key of sortedColumnKeys) {
-    columns.get(key).sort((a, b) => a.id.localeCompare(b.id));
+    columns.get(key).sort((a, b) => a.number - b.number);
   }
 
   const nodeWidth = 280;
@@ -318,7 +474,7 @@ function renderDependencyGraph(issues) {
     column.forEach((issue, rowIndex) => {
       const x = margin + colIndex * (nodeWidth + colGap);
       const y = margin + rowIndex * (nodeHeight + rowGap);
-      positions.set(issue.id, { x, y });
+      positions.set(issue.number, { x, y });
     });
   });
 
@@ -327,13 +483,13 @@ function renderDependencyGraph(issues) {
 
   const edges = [];
   for (const issue of issues) {
-    const targetPos = positions.get(issue.id);
+    const targetPos = positions.get(issue.number);
     if (!targetPos) {
       continue;
     }
-    for (const depId of issue.dependsOnIds) {
-      const dep = issueById.get(depId);
-      const sourcePos = dep ? positions.get(dep.id) : null;
+    for (const depNumber of issue.dependsOnNumbers) {
+      const dep = issueByNumber.get(depNumber);
+      const sourcePos = dep ? positions.get(dep.number) : null;
       if (!sourcePos) {
         continue;
       }
@@ -349,16 +505,16 @@ function renderDependencyGraph(issues) {
 
   const nodes = issues
     .slice()
-    .sort((a, b) => a.id.localeCompare(b.id))
+    .sort((a, b) => a.number - b.number)
     .map((issue) => {
-      const pos = positions.get(issue.id);
+      const pos = positions.get(issue.number);
       const x = pos.x;
       const y = pos.y;
       const title = issue.title.length > 36 ? `${issue.title.slice(0, 33)}...` : issue.title;
       return [
         `<a href="issues/${escapeHtml(issue.slug)}.html">`,
         `<rect x="${x}" y="${y}" width="${nodeWidth}" height="${nodeHeight}" rx="3" class="graph-node" />`,
-        `<text x="${x + 18}" y="${y + 31}" class="graph-id">Issue #${escapeHtml(issue.id)}</text>`,
+        `<text x="${x + 18}" y="${y + 31}" class="graph-id">${escapeHtml(formatIssueKey(issue.idText))}</text>`,
         `<text x="${x + 18}" y="${y + 56}" class="graph-title">${escapeHtml(title)}</text>`,
         `<text x="${x + 18}" y="${y + 76}" class="graph-status">${escapeHtml(issue.status)}</text>`,
         '</a>'
@@ -385,18 +541,18 @@ function renderDependencyGraph(issues) {
   ].join('\n');
 }
 
-function linkIssueIds(ids, issueById, pageType) {
-  if (!ids.length) {
+function linkIssueIds(numbers, issueByNumber, pageType) {
+  if (!numbers.length) {
     return '—';
   }
-  return ids
-    .map((id) => {
-      const issue = issueById.get(id);
+  return numbers
+    .map((number) => {
+      const issue = issueByNumber.get(number);
       if (!issue) {
-        return `#${escapeHtml(id)}`;
+        return escapeHtml(formatIssueKeyFromNumber(number));
       }
-      const href = pageType === 'index' ? `issues/${issue.slug}.html` : `${issue.slug}.html`;
-      return `<a href="${escapeHtml(href)}">#${escapeHtml(issue.id)}</a>`;
+      const href = issueHref(issue, pageType);
+      return `<a href="${escapeHtml(href)}">${escapeHtml(formatIssueKey(issue.idText))}</a>`;
     })
     .join(', ');
 }
@@ -430,22 +586,21 @@ function renderLayout({ title, content, rootPath }) {
 }
 
 function renderIndexPage(issues) {
-  const issueById = getIssueByIdMap(issues);
+  const issueByNumber = getIssueByNumberMap(issues);
   const openCount = issues.filter((issue) => toToken(issue.status) === 'open').length;
-  const blockedCount = issues.filter((issue) => issue.dependsOnIds.length > 0).length;
-  const readyCount = issues.filter((issue) => issue.dependsOnIds.length === 0).length;
-  const highPriorityCount = issues.filter((issue) => toToken(issue.priority) === 'high').length;
+  const closedCount = issues.filter((issue) => toToken(issue.status) === 'closed').length;
+  const blockedCount = issues.filter((issue) => issue.dependsOnNumbers.length > 0).length;
+  const readyCount = issues.filter((issue) => issue.dependsOnNumbers.length === 0).length;
 
   const rows = issues
     .map((issue) => {
       return [
         '<tr>',
-        `<td><a class="issue-link" href="issues/${escapeHtml(issue.slug)}.html">#${escapeHtml(issue.id)}</a></td>`,
+        `<td><a class="issue-link" href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(formatIssueKey(issue.idText))}</a></td>`,
         `<td><a class="issue-link title-link" href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(issue.title)}</a></td>`,
         `<td><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></td>`,
-        `<td><span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span></td>`,
-        `<td>${linkIssueIds(issue.dependsOnIds, issueById, 'index')}</td>`,
-        `<td>${linkIssueIds(issue.blocksIds, issueById, 'index')}</td>`,
+        `<td>${linkIssueIds(issue.dependsOnNumbers, issueByNumber, 'index')}</td>`,
+        `<td>${linkIssueIds(issue.blocksNumbers, issueByNumber, 'index')}</td>`,
         '</tr>'
       ].join('\n');
     })
@@ -454,12 +609,11 @@ function renderIndexPage(issues) {
     .map((issue) => {
       return [
         '<article class="issue-card">',
-        `<h3><a href="issues/${escapeHtml(issue.slug)}.html">#${escapeHtml(issue.id)} ${escapeHtml(issue.title)}</a></h3>`,
+        `<h3><a href="issues/${escapeHtml(issue.slug)}.html">${escapeHtml(formatIssueKey(issue.idText))} ${escapeHtml(issue.title)}</a></h3>`,
         '<div class="issue-card-meta">',
         `<div><span class="label">Status</span><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></div>`,
-        `<div><span class="label">Priority</span><span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span></div>`,
-        `<div><span class="label">Depends On</span><span>${linkIssueIds(issue.dependsOnIds, issueById, 'index')}</span></div>`,
-        `<div><span class="label">Blocks</span><span>${linkIssueIds(issue.blocksIds, issueById, 'index')}</span></div>`,
+        `<div><span class="label">Depends On</span><span>${linkIssueIds(issue.dependsOnNumbers, issueByNumber, 'index')}</span></div>`,
+        `<div><span class="label">Blocks</span><span>${linkIssueIds(issue.blocksNumbers, issueByNumber, 'index')}</span></div>`,
         '</div>',
         '</article>'
       ].join('\n');
@@ -472,13 +626,13 @@ function renderIndexPage(issues) {
     '<header class="page-intro">',
     '<p class="kicker">Issue Tracker</p>',
     '<h1>Wuhu Issue Tracker</h1>',
-    '<p class="lede">Static site generated from <code>issues/*.md</code> with status, priority, and dependency relationships.</p>',
+    '<p class="lede">Static site generated from <code>issues/*.md</code> with status and dependency relationships.</p>',
     '<div class="overview-meta">',
     `<p><span class="label">Total</span><strong>${issues.length}</strong></p>`,
     `<p><span class="label">Open</span><strong>${openCount}</strong></p>`,
+    `<p><span class="label">Closed</span><strong>${closedCount}</strong></p>`,
     `<p><span class="label">Ready</span><strong>${readyCount}</strong></p>`,
     `<p><span class="label">Blocked</span><strong>${blockedCount}</strong></p>`,
-    `<p><span class="label">High Priority</span><strong>${highPriorityCount}</strong></p>`,
     '</div>',
     '</header>',
     '<section class="panel">',
@@ -489,7 +643,7 @@ function renderIndexPage(issues) {
     '<div class="table-wrap">',
     '<table>',
     '<thead>',
-    '<tr><th>ID</th><th>Title</th><th>Status</th><th>Priority</th><th>Depends On</th><th>Blocks</th></tr>',
+    '<tr><th>ID</th><th>Title</th><th>Status</th><th>Depends On</th><th>Blocks</th></tr>',
     '</thead>',
     '<tbody>',
     rows,
@@ -516,33 +670,33 @@ function renderIndexPage(issues) {
   });
 }
 
-function renderIssuePage(issue, issueById) {
-  const depends = linkIssueIds(issue.dependsOnIds, issueById, 'issue');
-  const blocks = linkIssueIds(issue.blocksIds, issueById, 'issue');
+function renderIssuePage(issue, issueByNumber) {
+  const depends = linkIssueIds(issue.dependsOnNumbers, issueByNumber, 'issue');
+  const blocks = linkIssueIds(issue.blocksNumbers, issueByNumber, 'issue');
+  const bodyHtml = renderMarkdown(issue.bodyMarkdown, 'issue');
 
   const content = [
     '<nav class="crumbs"><a href="../index.html">All Issues</a></nav>',
     '<header class="page-intro issue-intro">',
-    `<p class="kicker">Issue #${escapeHtml(issue.id)}</p>`,
+    `<p class="kicker">${escapeHtml(formatIssueKey(issue.idText))}</p>`,
     `<h1>${escapeHtml(issue.title)}</h1>`,
-    `<p class="lede">Status <span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span> with <span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span> priority.</p>`,
+    `<p class="lede">Status <span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span>.</p>`,
     '</header>',
     '<article class="panel issue">',
     '<div class="meta-grid">',
     `<div><span class="label">Status</span><span class="pill pill-${toToken(issue.status)}">${escapeHtml(issue.status)}</span></div>`,
-    `<div><span class="label">Priority</span><span class="pill pill-${toToken(issue.priority)}">${escapeHtml(issue.priority)}</span></div>`,
     `<div><span class="label">Depends On</span><span>${depends}</span></div>`,
     `<div><span class="label">Blocks</span><span>${blocks}</span></div>`,
     '</div>',
     '<hr />',
     '<section class="md-content">',
-    issue.bodyHtml,
+    bodyHtml,
     '</section>',
     '</article>'
   ].join('\n');
 
   return renderLayout({
-    title: `Issue #${issue.id} - ${issue.title}`,
+    title: `${formatIssueKey(issue.idText)} - ${issue.title}`,
     content,
     rootPath: '../'
   });
@@ -843,11 +997,16 @@ tbody tr:hover td {
   text-transform: uppercase;
 }
 
-.pill-open,
-.pill-high {
+.pill-open {
   border-color: #de6a09;
   background: rgba(239, 109, 0, 0.18);
   color: #883700;
+}
+
+.pill-closed {
+  border-color: #b9b2a8;
+  background: rgba(185, 178, 168, 0.2);
+  color: #5c5751;
 }
 
 .issue-intro {
@@ -1058,14 +1217,15 @@ function main() {
   const issueFiles = fs
     .readdirSync(ISSUES_DIR)
     .filter((file) => file.endsWith('.md'))
-    .sort((a, b) => parseIssueId(a).localeCompare(parseIssueId(b)));
+    .sort((a, b) => parseIssueFileName(a).number - parseIssueFileName(b).number);
 
   const issues = issueFiles.map((fileName) => {
     const markdown = fs.readFileSync(path.join(ISSUES_DIR, fileName), 'utf8');
     return parseIssue(fileName, markdown);
   });
 
-  const issueById = getIssueByIdMap(issues);
+  verifyIssues(issues, issueFiles);
+  const issueByNumber = assignBlocksAndVerifyDeps(issues);
 
   fs.rmSync(DIST_DIR, { recursive: true, force: true });
   ensureDir(DIST_ISSUES_DIR);
@@ -1076,7 +1236,7 @@ function main() {
   fs.writeFileSync(path.join(DIST_DIR, 'index.html'), indexHtml, 'utf8');
 
   for (const issue of issues) {
-    const issueHtml = renderIssuePage(issue, issueById);
+    const issueHtml = renderIssuePage(issue, issueByNumber);
     fs.writeFileSync(path.join(DIST_ISSUES_DIR, `${issue.slug}.html`), issueHtml, 'utf8');
   }
 

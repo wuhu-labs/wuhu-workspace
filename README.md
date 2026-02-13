@@ -6,14 +6,14 @@ Issue tracking and project management for [wuhu-labs/wuhu](https://github.com/wu
 
 | ID | Title | Status | Depends On |
 |----|-------|--------|------------|
-| [002](issues/002-model-provider-switcher.md) | Model/Provider Switcher | Open | — |
-| [001](issues/001-llm-retry-backoff.md) | LLM Retry with Backoff | Open | 002 |
+| [WUHU-0002](issues/0002-model-provider-switcher.md) | Model/Provider Switcher | Open | — |
+| [WUHU-0001](issues/0001-llm-retry-backoff.md) | LLM Retry with Backoff | Open | WUHU-0002 |
 
 ## Dependency Graph
 
 ```
-002 Model/Provider Switcher
- └──► 001 LLM Retry with Backoff
+WUHU-0002 Model/Provider Switcher
+ └──► WUHU-0001 LLM Retry with Backoff
 ```
 
 ## Static Site
