@@ -1,15 +1,14 @@
 ---
 title: "Multi-Repo Strategy"
 kind: architecture
-status: draft
+status: active
 ---
 
 # Multi-Repo Strategy
 
 ## Why Multi-Repo
 
-Wuhu is splitting from a single monolithic Swift package into multiple
-independent repositories. The motivations:
+Wuhu is split across multiple independent repositories. The motivations:
 
 1. **Parallel agent development**: Multiple agents can work on different
    packages simultaneously without interfering with each other. Separate repos
@@ -23,9 +22,9 @@ independent repositories. The motivations:
    test in isolation, and validate. An agent working on the workspace engine
    doesn't need to understand the server or the app.
 
-4. **Selective integration**: The main Wuhu repo pins specific versions of
-   each dependency. A package can "boil" with experimental changes without
-   affecting downstream consumers until explicitly integrated.
+4. **Selective integration**: Downstream repos pin specific version tags.
+   A package can "boil" with experimental changes on main without affecting
+   consumers until explicitly integrated via a new tag.
 
 5. **Experimentation**: Mini apps can be spun up from a subset of packages
    (e.g., PiAI + chat UI) to try ideas without booting the full system.
@@ -38,9 +37,21 @@ iteration while still providing pinnable version tags.
 
 Packages graduate to 1.0 when their contracts stabilize.
 
-## Repository Layout
+### Why version tags, not branches
 
-### wuhu-pi-ai
+Downstream repos depend on version tags (e.g., `from: "0.1.0"`), not
+branches. The reason is simple: **tags are commitment, branches are not.**
+
+You want the freedom to experiment and break things on `main` without forcing
+downstream consumers to deal with it. Only when you're happy do you tag a
+release, and that tag is the signal: "this is ready for others to consume."
+
+A branch like `main` is a moving target. A tag like `0.1.0` is immutable.
+This lets each repo iterate independently without accidental coupling.
+
+## Repository Layout (Current)
+
+### wuhu-ai
 
 **LLM client library.** Zero Wuhu-specific knowledge.
 
@@ -48,69 +59,57 @@ Packages graduate to 1.0 when their contracts stabilize.
 - Streaming support, tool call parsing, retry policies
 - Request/response types, model catalogs
 - **Dependencies**: None (Foundation only)
-- **First to extract** — already self-contained in the current codebase
+- **Status**: Extracted. Tagged at 0.1.0.
 
-### wuhu-workspace
+### wuhu-workspace-engine
 
-**Workspace engine + contracts.**
+**Workspace scanning and querying.**
 
-Contains two library products from a single repo:
-- `WorkspaceContracts` — Thin, stable types and protocols
-- `WorkspaceEngine` — Implementation (markdown parser, YAML frontmatter
-  indexer, implicit rules engine, query executor, database views)
-
-Consumers import only the product they need. The UI package imports
-`WorkspaceContracts` and mocks the engine. The server imports both.
-
+- Markdown parser, YAML frontmatter indexer, directory scanner
+- Query engine for workspace docs and issues
 - **Dependencies**: None (Foundation only)
-- Query language TBD (SQL-like, Datalog, or custom DSL)
-- `wuhu.yml` rules engine for implicit metadata
+- **Status**: Extracted. Tagged at 0.1.0.
 
 ### wuhu-core
 
-**Agent runtime, session model, contracts.**
+**Agent runtime, session model, server, runner, CLI.**
 
-The heart of Wuhu:
-- `AgentLoop` + `AgentBehavior` protocol
-- Session model: append-only transcript, three-lane queues (system, steer,
-  follow-up), compaction
-- Subscription system: state + patch, gap-free reconnection, streaming deltas
-- Session identity, settings, status
-- Contracts for commanding and subscribing
+The heart of Wuhu — everything except the native apps:
+- `WuhuAPI` — Shared types: models, enums, HTTP types, provider definitions
+- `WuhuCoreClient` — Client-safe session contracts, queue types, SSE transport
+- `WuhuCore` — Agent loop, session store, SQLite persistence, tools, compaction
+- `WuhuClient` — HTTP client library
+- `WuhuServer` — Hummingbird HTTP server, runner registry
+- `WuhuRunner` — Remote tool execution daemon
+- `WuhuCLIKit` — CLI output formatting
+- `wuhu` CLI executable — Wires everything together
+- All tests
 
-- **Dependencies**: `wuhu-pi-ai`
+The CLI lives here intentionally: it gives coding agents working on core the
+ability to test features end-to-end (spin up a server, send prompts, verify
+behavior) without needing a separate repo.
 
-### wuhu (main repo)
-
-**Server, runner, CLI, integration.**
-
-Wires everything together:
-- HTTP server (Hummingbird/Vapor)
-- Runner protocol (WebSocket, language-agnostic)
-- QuickJS sandbox for agent tool execution
-- CLI (`wuhu server`, `wuhu client`, `wuhu runner`)
-- Environment management, skills, tool execution
-- SQLite persistence (GRDB)
-
-- **Dependencies**: `wuhu-pi-ai`, `wuhu-core`, `wuhu-workspace`
+- **Dependencies**: `wuhu-ai`, `wuhu-workspace-engine`, GRDB, Hummingbird, Yams
+- **Status**: Extracted from `wuhu` monorepo. Tagged at 0.1.0.
 
 ### wuhu-app
 
-**Native apps: macOS, iOS, visionOS.**
+**Native apps: macOS and iOS.**
 
-Ultra-modularized with TCA (ComposableArchitecture):
-- Each feature is its own module
-- UI packages depend on contracts, not engines
-- Previews work with fake data, no server needed
-- Potentially explore Tuist for build management
+SwiftUI + TCA (ComposableArchitecture):
+- iOS app (`WuhuApp`)
+- macOS app (`WuhuAppMac`)
+- XcodeGen-based project (`project.yml` is source of truth)
+- TestFlight build/upload scripts
 
-Sub-packages (internal modules or separate products):
-- `wuhu-workspace-ui` — Kanban, database views, doc viewer
-- `wuhu-chat-ui` — Channel chat, session thread, streaming
-- `wuhu-session-ui` — Session list, detail, model picker
+- **Dependencies**: `wuhu-core` (for `WuhuAPI`, `WuhuClient`, `WuhuCoreClient`),
+  ComposableArchitecture, MarkdownUI
+- **Status**: Extracted from `wuhu` monorepo.
 
-- **Dependencies**: `WorkspaceContracts` (from wuhu-workspace),
-  session/API contracts (from wuhu-core or a shared API types package)
+### wuhu (archived)
+
+The original monorepo. Frozen after the split into `wuhu-core` and `wuhu-app`.
+May be repurposed for marketing materials in the future.
 
 ## Contracts Philosophy
 
@@ -134,30 +133,28 @@ and stable.
 
 ## Development Workflow
 
-### Folder Template Workspace
+### Umbrella Workspace
 
-A folder template for agent development:
+The [wuhu-umbrella](https://github.com/wuhu-labs/wuhu-umbrella) repo ties
+all repos together as a folder-template for agent development:
 
 ```
-wuhu-dev/
-  AGENTS.md            # Work patterns, quick intro to each repo
-  pi-ai/               # clone of wuhu-pi-ai
-  workspace/            # clone of wuhu-workspace
-  core/                 # clone of wuhu-core
-  wuhu/                 # clone of wuhu (main)
-  app/                  # clone of wuhu-app
+wuhu-umbrella/
+  AGENTS.md            # Cross-repo concerns
+  repos.yml            # Repo definitions for sync.ts
+  wuhu-ai/             # clone of wuhu-ai
+  wuhu-workspace-engine/  # clone of wuhu-workspace-engine
+  wuhu-core/           # clone of wuhu-core
+  wuhu-app/            # clone of wuhu-app
+  wuhu/                # clone of wuhu (archived)
 ```
 
-No `.build` folders in the template (fast copy). Each task gets a fresh copy
-via Wuhu's folder-template environment feature.
-
-Cross-package dependencies use `path: "../pi-ai"` during development, git
-URLs + version pins in releases.
+Each task gets a fresh copy via Wuhu's folder-template environment feature.
+Run `bun sync.ts` to pull latest on all child repos.
 
 ### CI
 
-Each repo has its own CI. GitHub Actions with branch protection rules
-(programmatically configured via GitHub API).
+Each repo has its own CI. GitHub Actions with branch protection rules.
 
 ### Agent Ergonomics
 
@@ -166,13 +163,27 @@ head. An agent working on the workspace query engine only needs to understand
 that one repo. It runs tests locally, validates, ships a PR. No knowledge of
 the server, the app, or the agent runtime required.
 
-## Extraction Order
+## Dependency Graph
 
-1. **wuhu-pi-ai** — Already self-contained. Extract first.
-2. **wuhu-workspace** — New code, can start fresh in its own repo.
-3. **wuhu-core** — Requires careful extraction from current WuhuCore.
-4. **wuhu** (main) — Becomes the integration point.
-5. **wuhu-app** — Already somewhat separate (WuhuMVPApp has its own project).
+```
+wuhu-ai (PiAI)              wuhu-workspace-engine (WorkspaceEngine, WorkspaceScanner)
+     ↑                                    ↑
+     └─────────── wuhu-core ─────────────┘
+                     ↑
+                  wuhu-app
+```
+
+## Future Considerations
+
+- **wuhu-core could split further**: The doc's original vision had a separate
+  `wuhu-core` (pure runtime/contracts) and `wuhu` (server/integration). If
+  the repo grows large enough that agents struggle with context, this split
+  can be revisited. For now, keeping them together gives end-to-end
+  testability.
+
+- **Ultra-modular app**: `wuhu-app` could eventually have internal modules
+  per feature (workspace UI, chat UI, session UI) built with Tuist or SPM
+  local packages.
 
 ## Build Times and Caching
 
