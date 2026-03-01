@@ -1,13 +1,13 @@
 ---
-name: macos-notarized-build
+name: macos-manual-build
 description: |
-  Build, notarize, and staple the Wuhu macOS app for distribution outside
-  the App Store. Produces a Developer ID-signed, Apple-notarized .app in
-  a zip, and copies it to iCloud Desktop. Use this when the user asks for
-  a macOS build or notarized build.
+  Manually build, notarize, and staple the Wuhu macOS app on the local
+  machine. Only use this when the user explicitly asks for a manual/local
+  macOS build — the normal release path is tag-based CI (see wuhu-app
+  AGENTS.md).
 ---
 
-# macOS Notarized Build
+# macOS Manual Build (Local)
 
 ## Quick path
 

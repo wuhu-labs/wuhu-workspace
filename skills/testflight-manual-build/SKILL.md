@@ -1,12 +1,13 @@
 ---
-name: testflight-deployment
+name: testflight-manual-build
 description: |
-  Build and upload the Wuhu iOS app to TestFlight. Covers xcodegen project
-  generation, archiving, exporting with API key auth, and uploading via
-  altool. Use this when the user asks to submit a build to TestFlight.
+  Manually build and upload the Wuhu iOS app to TestFlight from the local
+  machine. Only use this when the user explicitly asks for a manual/local
+  TestFlight build — the normal release path is tag-based CI (see wuhu-app
+  AGENTS.md).
 ---
 
-# TestFlight Deployment
+# TestFlight Manual Build (Local)
 
 ## Quick path
 
