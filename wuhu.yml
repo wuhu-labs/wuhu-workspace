@@ -1,0 +1,10 @@
+kinds:
+  - kind: issue
+    properties:
+      - status
+      - priority
+      - assignee
+
+rules:
+  - path: "issues/**"
+    kind: issue
